@@ -1,0 +1,20 @@
+
+**3. .gitignore**
+```txt
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+env/
+venv/
+.venv/
+.env
+*.log
+reports/
+MIT License
+
+Copyright (c) 2026 Your Name
+
+Permission is hereby granted, free of charge, to any person obtaining a copy...
+[Full MIT text — copy from https://opensource.org/licenses/MIT]
