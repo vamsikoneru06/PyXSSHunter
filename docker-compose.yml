@@ -1,0 +1,17 @@
+version: '3.8'
+
+services:
+  pyxsshunter:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+    image: pyxsshunter:latest
+    container_name: pyxsshunter
+    # Mount current directory for easy proxy list / reports (optional)
+    volumes:
+      - ./reports:/app/reports
+      - ./proxies.txt:/app/proxies.txt:ro   # if you have a proxies file
+    # Example: run with custom args
+    # command: scan --url "https://testphp.vulnweb.com" --stealth-level medium
+    stdin_open: true
+    tty: true
