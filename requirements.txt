@@ -1,5 +1,16 @@
-requests>=2.32.0
-rich>=13.7.0
-beautifulsoup4>=4.12.0
-typer>=0.12.0
-colorama>=0.4.6
+
+## 📖 Usage
+
+### Basic Scan
+
+**Using Docker:**
+```powershell
+# Windows PowerShell
+docker run --rm `
+  -v "${PWD}/reports:/app/reports" `
+  pyxsshunter:latest `
+  scan `
+    --url "http://testphp.vulnweb.com/search.php?test=1" `
+    --stealth-level medium `
+    --max-payloads 80 `
+    --output /app/reports
