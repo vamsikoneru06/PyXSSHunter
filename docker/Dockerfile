@@ -46,8 +46,10 @@ LABEL org.opencontainers.image.source="https://github.com/yourusername/PyXSSHunt
 
 USER appuser
 
-# Reports directory is exposed for volume mounting
 VOLUME ["/app/reports"]
 
+# Better ENTRYPOINT for Typer CLI
 ENTRYPOINT ["python", "-m", "pyxsshunter"]
+
+# Default command
 CMD ["--help"]
