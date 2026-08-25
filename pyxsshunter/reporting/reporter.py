@@ -1,14 +1,16 @@
+import html as html_escape
 from pathlib import Path
 from datetime import datetime
 from urllib.parse import urlparse
 
 def generate_html_report(results: list, target_url: str) -> str:
     """Generate a simple but nice HTML report"""
+    safe_target_url = html_escape.escape(target_url)
     html = f"""
     <!DOCTYPE html>
     <html>
     <head>
-        <title>PyXSSHunter Report - {target_url}</title>
+        <title>PyXSSHunter Report - {safe_target_url}</title>
         <style>
             body {{ font-family: Arial, sans-serif; margin: 40px; }}
             h1 {{ color: #d32f2f; }}
@@ -16,31 +18,44 @@ def generate_html_report(results: list, target_url: str) -> str:
             th, td {{ border: 1px solid #ddd; padding: 8px; text-align: left; }}
             th {{ background-color: #f5f5f5; }}
             .vulnerable {{ color: red; font-weight: bold; }}
+            .curl {{ font-family: monospace; white-space: pre-wrap; word-break: break-all; }}
+            .screenshot {{ max-width: 320px; }}
         </style>
     </head>
     <body>
         <h1>PyXSSHunter XSS Scan Report</h1>
-        <p><strong>Target:</strong> {target_url}</p>
+        <p><strong>Target:</strong> {safe_target_url}</p>
         <p><strong>Scan Time:</strong> {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}</p>
         <p><strong>Findings:</strong> {len(results)} potential XSS issues</p>
-        
+
         <table>
             <tr>
                 <th>#</th>
+                <th>Type</th>
                 <th>Vulnerable URL</th>
                 <th>Payload</th>
                 <th>Status</th>
                 <th>Evidence</th>
+                <th>curl PoC</th>
+                <th>Screenshot</th>
             </tr>
     """
     for i, r in enumerate(results, 1):
+        screenshot_b64 = r.get("screenshot_b64")
+        screenshot_cell = (
+            f'<img class="screenshot" src="data:image/png;base64,{screenshot_b64}" alt="PoC screenshot">'
+            if screenshot_b64 else "&mdash;"
+        )
         html += f"""
             <tr>
                 <td>{i}</td>
-                <td class="vulnerable">{r['url']}</td>
-                <td>{r['payload']}</td>
+                <td>{html_escape.escape(r.get('type', 'Reflected'))}</td>
+                <td class="vulnerable">{html_escape.escape(r['url'])}</td>
+                <td>{html_escape.escape(r['payload'])}</td>
                 <td>{r['status']}</td>
-                <td>{r['evidence']}</td>
+                <td>{html_escape.escape(r['evidence'])}</td>
+                <td class="curl">{html_escape.escape(r.get('curl_command', ''))}</td>
+                <td>{screenshot_cell}</td>
             </tr>
         """
     html += """
@@ -51,9 +66,9 @@ def generate_html_report(results: list, target_url: str) -> str:
     """
     return html
 
-def save_report(html_content: str, output_dir: Path, base_name: str) -> str:
+def save_report(html_content: str, output_dir: Path, base_name: str, timestamp: str = None) -> str:
     """Save report to file and return full path"""
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    timestamp = timestamp or datetime.now().strftime("%Y%m%d_%H%M%S")
     filename = output_dir / f"{base_name}_{timestamp}.html"
 
     with open(filename, "w", encoding="utf-8") as f:

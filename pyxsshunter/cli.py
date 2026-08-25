@@ -1,11 +1,23 @@
 import typer
+from datetime import datetime
+from urllib.parse import urlparse
 from rich.console import Console
 from pathlib import Path
 from .core.scanner import StealthScanner
+from .core.dom_scanner import DomXSSScanner
 from .reporting.reporter import generate_html_report, save_report
+from .reporting.pdf import save_pdf_report
+from .utils.screenshot import ScreenshotCapturer
 
 console = Console()
 app = typer.Typer(help="PyXSSHunter - Stealthy XSS Scanner")
+
+DISCLAIMER = (
+    "[bold yellow]PyXSSHunter must only be used against systems you own or have explicit, "
+    "written authorization to test. Unauthorized scanning may violate the Computer Fraud and "
+    "Abuse Act (CFAA) or equivalent laws in your jurisdiction. The author accepts no liability "
+    "for misuse.[/bold yellow]"
+)
 
 @app.command()
 def scan(
@@ -15,7 +27,46 @@ def scan(
         max_payloads: int = typer.Option(50, "--max-payloads", help="Max payloads to test"),
         output: str = typer.Option("reports", "--output", "-o", help="Directory to save reports"),
         report_name: str = typer.Option(None, "--report-name", help="Custom report filename (without extension)"),
+        i_have_permission: bool = typer.Option(
+            False, "--i-have-permission",
+            help="Confirm you own or are explicitly authorized to test the target URL. Required to run a scan."
+        ),
+        stored: bool = typer.Option(
+            False, "--stored",
+            help="Also test for stored XSS by submitting payloads to forms found on the page. "
+                 "This WRITES data to the target (e.g. comments, guestbook entries) — only use "
+                 "on targets where persisting test data is acceptable."
+        ),
+        dom: bool = typer.Option(
+            False, "--dom",
+            help="Also test for DOM-based XSS by rendering injection points (URL hash/query params) "
+                 "in a headless browser and watching for JS execution. Slower — launches a real browser."
+        ),
+        pdf: bool = typer.Option(
+            False, "--pdf",
+            help="Also export the report as PDF alongside the HTML report."
+        ),
+        screenshot: bool = typer.Option(
+            False, "--screenshot",
+            help="Capture a PoC screenshot for each finding and embed it in the report. "
+                 "Slower — launches a headless browser to revisit every finding."
+        ),
 ):
+    console.print(DISCLAIMER)
+
+    if not i_have_permission:
+        console.print(
+            "[bold red]Refusing to scan: pass --i-have-permission to confirm you are "
+            "authorized to test this target.[/bold red]"
+        )
+        raise typer.Exit(code=1)
+
+    if stored:
+        console.print(
+            "[bold yellow]--stored is enabled: this will submit payloads to any forms found "
+            "on the page, which may persist data (comments, entries, etc.) on the target.[/bold yellow]"
+        )
+
     console.print(f"[bold cyan]Starting PyXSSHunter scan on {url}[/bold cyan]")
     console.print(f"[yellow]Stealth Level: {stealth_level.upper()}[/yellow]")
 
@@ -39,15 +90,38 @@ def scan(
 
     results = scanner.scan(url)
 
+    if stored:
+        results += scanner.scan_stored(url)
+
+    if dom:
+        dom_scanner = DomXSSScanner(stealth_level=stealth_level, max_payloads=max_payloads)
+        results += dom_scanner.scan(url)
+
     console.print(f"[green]Scan completed! Found {len(results)} potential vulnerabilities.[/green]")
 
-    # Generate and save report
-    if results:
-        html_content = generate_html_report(results, url)
-        filename = save_report(html_content, output_dir, report_name or f"xss_report_{urlparse(url).netloc}")
-        console.print(f"[bold green]Report saved to: {filename}[/bold green]")
-    else:
+    if not results:
         console.print("[yellow]No vulnerabilities found. No report generated.[/yellow]")
+        return
+
+    if screenshot:
+        console.print("[cyan]Capturing PoC screenshots...[/cyan]")
+        with ScreenshotCapturer() as capturer:
+            for r in results:
+                shot = capturer.capture(r["url"])
+                if shot:
+                    r["screenshot_b64"] = shot
+
+    # Generate and save report
+    html_content = generate_html_report(results, url)
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    base_name = report_name or f"xss_report_{urlparse(url).netloc}"
+
+    filename = save_report(html_content, output_dir, base_name, timestamp=timestamp)
+    console.print(f"[bold green]Report saved to: {filename}[/bold green]")
+
+    if pdf:
+        pdf_filename = save_pdf_report(results, url, output_dir, base_name, timestamp=timestamp)
+        console.print(f"[bold green]PDF report saved to: {pdf_filename}[/bold green]")
 
 if __name__ == "__main__":
     app()
