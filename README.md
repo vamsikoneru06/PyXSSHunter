@@ -107,3 +107,7 @@ Each finding in the HTML report includes the vulnerable URL, the payload used, t
 ## Disclaimer
 
 This tool is intended for authorized security testing only. The author accepts no liability for misuse or damage caused by this tool. Always obtain explicit permission before testing any system you do not own.
+
+## License
+
+MIT — see [LICENSE](LICENSE).
