@@ -21,6 +21,8 @@ class StealthScanner:
         self.proxy_manager = ProxyManager(proxies)
         self.payload_manager = PayloadManager(max_payloads=max_payloads)
         self.min_delay, self.max_delay = STEALTH_DELAYS.get(stealth_level, STEALTH_DELAYS["medium"])
+        self.total_attempts = 0
+        self.failed_attempts = 0
 
     def scan(self, target_url: str):
         results = []
@@ -32,6 +34,7 @@ class StealthScanner:
             task = progress.add_task("[cyan]Scanning...", total=len(payloads))
 
             for payload in payloads:
+                self.total_attempts += 1
                 try:
                     human_delay(self.min_delay, self.max_delay, self.stealth_level)
                     headers = get_random_headers()
@@ -67,6 +70,7 @@ class StealthScanner:
                             console.print(f"[bold red]Potential XSS found![/bold red] -> {test_url}")
 
                 except Exception as e:
+                    self.failed_attempts += 1
                     console.print(f"[yellow]Request error: {str(e)[:100]}[/yellow]")
 
                 progress.update(task, advance=1)
@@ -78,12 +82,14 @@ class StealthScanner:
         reflect back unsanitized on a later page load (stored/persistent XSS)."""
         results = []
 
+        self.total_attempts += 1
         try:
             resp = self.session.get(
                 target_url, headers=get_random_headers(),
                 proxies=self.proxy_manager.get_proxy(), timeout=DEFAULT_TIMEOUT
             )
         except Exception as e:
+            self.failed_attempts += 1
             console.print(f"[red]Failed to fetch {target_url}: {str(e)[:100]}[/red]")
             return results
 
@@ -100,6 +106,7 @@ class StealthScanner:
 
             for form in forms:
                 for payload in payloads:
+                    self.total_attempts += 1
                     try:
                         human_delay(self.min_delay, self.max_delay, self.stealth_level)
                         submit_headers = get_random_headers()
@@ -132,6 +139,7 @@ class StealthScanner:
                             console.print(f"[bold red]Potential Stored XSS found![/bold red] -> {form['action']}")
 
                     except Exception as e:
+                        self.failed_attempts += 1
                         console.print(f"[yellow]Request error: {str(e)[:100]}[/yellow]")
 
                     progress.update(task, advance=1)

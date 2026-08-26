@@ -93,9 +93,22 @@ def scan(
     if stored:
         results += scanner.scan_stored(url)
 
+    dom_scanner = None
     if dom:
         dom_scanner = DomXSSScanner(stealth_level=stealth_level, max_payloads=max_payloads)
         results += dom_scanner.scan(url)
+
+    total_attempts = scanner.total_attempts + (dom_scanner.total_attempts if dom_scanner else 0)
+    failed_attempts = scanner.failed_attempts + (dom_scanner.failed_attempts if dom_scanner else 0)
+
+    if total_attempts:
+        console.print(f"[cyan]{total_attempts - failed_attempts}/{total_attempts} requests succeeded ({failed_attempts} failed).[/cyan]")
+        if failed_attempts == total_attempts:
+            console.print(
+                "[bold red]Every request failed - this target was likely unreachable. "
+                "'No vulnerabilities found' below does not mean the target is safe; "
+                "check connectivity before trusting this result.[/bold red]"
+            )
 
     console.print(f"[green]Scan completed! Found {len(results)} potential vulnerabilities.[/green]")
 

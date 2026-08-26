@@ -18,6 +18,8 @@ class DomXSSScanner:
         self.stealth_level = stealth_level
         self.min_delay, self.max_delay = STEALTH_DELAYS.get(stealth_level, STEALTH_DELAYS["medium"])
         self.payload_manager = PayloadManager(max_payloads=max_payloads)
+        self.total_attempts = 0
+        self.failed_attempts = 0
 
     def _build_injection_urls(self, target_url: str, payloads: list) -> list:
         parsed = urlparse(target_url)
@@ -56,6 +58,7 @@ class DomXSSScanner:
                     page = browser.new_page()
                     page.on("dialog", on_dialog)
 
+                    self.total_attempts += 1
                     try:
                         human_delay(self.min_delay, self.max_delay, self.stealth_level)
                         page.goto(test_url, timeout=10000, wait_until="load")
@@ -73,6 +76,7 @@ class DomXSSScanner:
                             console.print(f"[bold red]Potential DOM-based XSS found![/bold red] -> {test_url}")
 
                     except Exception as e:
+                        self.failed_attempts += 1
                         console.print(f"[yellow]Render error: {str(e)[:100]}[/yellow]")
                     finally:
                         page.close()
