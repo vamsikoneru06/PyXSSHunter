@@ -1,4 +1,5 @@
 import typer
+from typing import List
 from datetime import datetime
 from urllib.parse import urlparse
 from rich.console import Console
@@ -8,6 +9,7 @@ from .core.dom_scanner import DomXSSScanner
 from .reporting.reporter import generate_html_report, save_report
 from .reporting.pdf import save_pdf_report
 from .utils.screenshot import ScreenshotCapturer
+from .utils.helpers import parse_cookie_string, parse_header_list
 
 console = Console()
 app = typer.Typer(help="PyXSSHunter - Stealthy XSS Scanner")
@@ -34,13 +36,13 @@ def scan(
         stored: bool = typer.Option(
             False, "--stored",
             help="Also test for stored XSS by submitting payloads to forms found on the page. "
-                 "This WRITES data to the target (e.g. comments, guestbook entries) — only use "
+                 "This WRITES data to the target (e.g. comments, guestbook entries) - only use "
                  "on targets where persisting test data is acceptable."
         ),
         dom: bool = typer.Option(
             False, "--dom",
             help="Also test for DOM-based XSS by rendering injection points (URL hash/query params) "
-                 "in a headless browser and watching for JS execution. Slower — launches a real browser."
+                 "in a headless browser and watching for JS execution. Slower - launches a real browser."
         ),
         pdf: bool = typer.Option(
             False, "--pdf",
@@ -49,7 +51,17 @@ def scan(
         screenshot: bool = typer.Option(
             False, "--screenshot",
             help="Capture a PoC screenshot for each finding and embed it in the report. "
-                 "Slower — launches a headless browser to revisit every finding."
+                 "Slower - launches a headless browser to revisit every finding."
+        ),
+        cookie: str = typer.Option(
+            None, "--cookie",
+            help="Cookie header to send with every request, e.g. 'PHPSESSID=abc123; security=low'. "
+                 "Needed to scan pages behind a login."
+        ),
+        header: List[str] = typer.Option(
+            [], "--header", "-H",
+            help="Custom header to send with every request, e.g. 'Authorization: Bearer xyz'. "
+                 "Can be repeated."
         ),
 ):
     console.print(DISCLAIMER)
@@ -82,10 +94,15 @@ def scan(
         except Exception as e:
             console.print(f"[red]Failed to load proxies: {e}[/red]")
 
+    cookies = parse_cookie_string(cookie)
+    extra_headers = parse_header_list(header)
+
     scanner = StealthScanner(
         stealth_level=stealth_level,
         proxies=proxy_list,
-        max_payloads=max_payloads
+        max_payloads=max_payloads,
+        extra_headers=extra_headers,
+        cookies=cookies
     )
 
     results = scanner.scan(url)
@@ -95,7 +112,10 @@ def scan(
 
     dom_scanner = None
     if dom:
-        dom_scanner = DomXSSScanner(stealth_level=stealth_level, max_payloads=max_payloads)
+        dom_scanner = DomXSSScanner(
+            stealth_level=stealth_level, max_payloads=max_payloads,
+            extra_headers=extra_headers, cookies=cookies
+        )
         results += dom_scanner.scan(url)
 
     total_attempts = scanner.total_attempts + (dom_scanner.total_attempts if dom_scanner else 0)
@@ -118,7 +138,7 @@ def scan(
 
     if screenshot:
         console.print("[cyan]Capturing PoC screenshots...[/cyan]")
-        with ScreenshotCapturer() as capturer:
+        with ScreenshotCapturer(extra_headers=extra_headers, cookies=cookies) as capturer:
             for r in results:
                 shot = capturer.capture(r["url"])
                 if shot:

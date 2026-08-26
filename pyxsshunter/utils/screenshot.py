@@ -1,4 +1,5 @@
 import base64
+from urllib.parse import urlparse
 from playwright.sync_api import sync_playwright
 
 class ScreenshotCapturer:
@@ -11,9 +12,14 @@ class ScreenshotCapturer:
     the target's origin or block redirects into private IP ranges before calling page.goto().
     """
 
+    def __init__(self, extra_headers: dict = None, cookies: dict = None):
+        self.extra_headers = extra_headers or {}
+        self.cookies = cookies or {}
+
     def __enter__(self):
         self._playwright = sync_playwright().start()
         self._browser = self._playwright.chromium.launch()
+        self._context = self._browser.new_context(extra_http_headers=self.extra_headers)
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
@@ -22,7 +28,13 @@ class ScreenshotCapturer:
 
     def capture(self, url: str, timeout_ms: int = 15000) -> str:
         """Load url and return a base64-encoded PNG screenshot, or None on failure"""
-        page = self._browser.new_page()
+        if self.cookies:
+            domain = urlparse(url).hostname
+            self._context.add_cookies([
+                {"name": name, "value": value, "domain": domain, "path": "/"}
+                for name, value in self.cookies.items()
+            ])
+        page = self._context.new_page()
         try:
             page.on("dialog", lambda dialog: dialog.dismiss())
             page.goto(url, timeout=timeout_ms, wait_until="load")

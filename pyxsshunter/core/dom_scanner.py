@@ -14,10 +14,13 @@ class DomXSSScanner:
     watching for the payload firing a JS dialog (alert/confirm/prompt), rather than just
     inspecting the raw HTTP response text like reflected/stored detection do."""
 
-    def __init__(self, stealth_level: str = "medium", max_payloads: int = 50):
+    def __init__(self, stealth_level: str = "medium", max_payloads: int = 50,
+                 extra_headers: dict = None, cookies: dict = None):
         self.stealth_level = stealth_level
         self.min_delay, self.max_delay = STEALTH_DELAYS.get(stealth_level, STEALTH_DELAYS["medium"])
         self.payload_manager = PayloadManager(max_payloads=max_payloads)
+        self.extra_headers = extra_headers or {}
+        self.cookies = cookies or {}
         self.total_attempts = 0
         self.failed_attempts = 0
 
@@ -44,6 +47,13 @@ class DomXSSScanner:
 
         with sync_playwright() as playwright:
             browser = playwright.chromium.launch()
+            context = browser.new_context(extra_http_headers=self.extra_headers)
+            if self.cookies:
+                domain = urlparse(target_url).hostname
+                context.add_cookies([
+                    {"name": name, "value": value, "domain": domain, "path": "/"}
+                    for name, value in self.cookies.items()
+                ])
 
             with Progress() as progress:
                 task = progress.add_task("[cyan]Rendering...", total=len(injections))
@@ -55,7 +65,7 @@ class DomXSSScanner:
                         triggered["fired"] = True
                         dialog.dismiss()
 
-                    page = browser.new_page()
+                    page = context.new_page()
                     page.on("dialog", on_dialog)
 
                     self.total_attempts += 1
@@ -71,7 +81,7 @@ class DomXSSScanner:
                                 "payload": payload,
                                 "status": 200,
                                 "evidence": "Payload executed client-side (JS dialog triggered) after page load",
-                                "curl_command": build_curl_command(test_url, {"User-Agent": "Mozilla/5.0"})
+                                "curl_command": build_curl_command(test_url, {"User-Agent": "Mozilla/5.0", **self.extra_headers})
                             })
                             console.print(f"[bold red]Potential DOM-based XSS found![/bold red] -> {test_url}")
 

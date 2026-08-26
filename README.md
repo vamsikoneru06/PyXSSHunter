@@ -97,6 +97,8 @@ docker run --rm `
 | `--dom` | Also test for DOM-based XSS by rendering injection points in a headless browser. Slower — launches a real browser per payload. | `False` |
 | `--pdf` | Also export the report as PDF alongside the HTML report. | `False` |
 | `--screenshot` | Capture and embed a PoC screenshot for each finding. Slower — launches a headless browser to revisit every finding. | `False` |
+| `--cookie` | Cookie header to send with every request, e.g. `'PHPSESSID=abc123; security=low'`. Needed to scan pages behind a login. | — |
+| `--header`, `-H` | Custom header to send with every request, e.g. `'Authorization: Bearer xyz'`. Repeatable. | — |
 
 > **Hardening note on `--screenshot`:** the headless browser follows HTTP redirects with no destination restriction, same as any browser. A malicious or compromised target could redirect it to an internal address and have that page captured into your report. Review embedded screenshots before sharing a report externally.
 

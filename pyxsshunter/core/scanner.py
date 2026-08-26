@@ -15,14 +15,21 @@ from ..utils.helpers import build_curl_command
 console = Console()
 
 class StealthScanner:
-    def __init__(self, stealth_level: str = "medium", proxies: list = None, max_payloads: int = 50):
+    def __init__(self, stealth_level: str = "medium", proxies: list = None, max_payloads: int = 50,
+                 extra_headers: dict = None, cookies: dict = None):
         self.stealth_level = stealth_level
         self.session = requests.Session()
+        if cookies:
+            self.session.cookies.update(cookies)
+        self.extra_headers = extra_headers or {}
         self.proxy_manager = ProxyManager(proxies)
         self.payload_manager = PayloadManager(max_payloads=max_payloads)
         self.min_delay, self.max_delay = STEALTH_DELAYS.get(stealth_level, STEALTH_DELAYS["medium"])
         self.total_attempts = 0
         self.failed_attempts = 0
+
+    def _headers(self) -> dict:
+        return {**get_random_headers(), **self.extra_headers}
 
     def scan(self, target_url: str):
         results = []
@@ -37,7 +44,7 @@ class StealthScanner:
                 self.total_attempts += 1
                 try:
                     human_delay(self.min_delay, self.max_delay, self.stealth_level)
-                    headers = get_random_headers()
+                    headers = self._headers()
                     proxy = self.proxy_manager.get_proxy()
 
                     # Simple reflected test: append payload to query params
@@ -85,7 +92,7 @@ class StealthScanner:
         self.total_attempts += 1
         try:
             resp = self.session.get(
-                target_url, headers=get_random_headers(),
+                target_url, headers=self._headers(),
                 proxies=self.proxy_manager.get_proxy(), timeout=DEFAULT_TIMEOUT
             )
         except Exception as e:
@@ -95,7 +102,7 @@ class StealthScanner:
 
         forms = find_forms(resp.text, target_url)
         if not forms:
-            console.print("[yellow]No forms found on page — nothing to test for stored XSS.[/yellow]")
+            console.print("[yellow]No forms found on page - nothing to test for stored XSS.[/yellow]")
             return results
 
         payloads = self.payload_manager.get_payloads()
@@ -109,7 +116,7 @@ class StealthScanner:
                     self.total_attempts += 1
                     try:
                         human_delay(self.min_delay, self.max_delay, self.stealth_level)
-                        submit_headers = get_random_headers()
+                        submit_headers = self._headers()
                         proxy = self.proxy_manager.get_proxy()
 
                         submit_form(self.session, form, payload, submit_headers, proxy, DEFAULT_TIMEOUT)
@@ -119,7 +126,7 @@ class StealthScanner:
                         # back in the immediate submission response.
                         human_delay(self.min_delay, self.max_delay, self.stealth_level)
                         verify_resp = self.session.get(
-                            target_url, headers=get_random_headers(),
+                            target_url, headers=self._headers(),
                             proxies=proxy, timeout=DEFAULT_TIMEOUT
                         )
 
